@@ -1,0 +1,139 @@
+SELECT * FROM Indian_Census.dbo.Sheet2$;
+
+SELECT * FROM Indian_Census.dbo.sheet$;
+
+--Dataset for the states Jharkhand and Bihar
+--Answer:
+SELECT * FROM Indian_Census.dbo.Sheet2$
+WHERE state in ('Jharkhand','Bihar');
+
+--Population of India
+SELECT SUM(population) AS Total_Population 
+FROM Indian_Census.dbo.sheet$;
+
+--Average Growth per State
+SELECT state, AVG(growth)*100 AS Avg_Growth
+FROM Indian_Census.dbo.Sheet2$
+GROUP BY state;
+
+--Average Sex Ratio
+SELECT state, ROUND(AVG(sex_ratio),0) AS Avg_Sex_Ratio 
+FROM Indian_Census.dbo.Sheet2$
+GROUP BY state
+ORDER BY Avg_Sex_Ratio DESC;
+
+--Average Litercy Rate
+SELECT state, ROUND(AVG(literacy),0) AS Avg_Litercy_Rate
+FROM Indian_Census.dbo.Sheet2$
+GROUP BY state 
+HAVING ROUND(AVG(literacy),0)>90
+ORDER BY Avg_Litercy_Rate DESC;
+
+--Top 3 State showing Highest Growth Ratio
+SELECT top 3 state, AVG(growth)*100 AS Avg_Growth
+FROM Indian_Census.dbo.Sheet2$
+GROUP BY state
+ORDER BY Avg_Growth Desc;
+
+
+--Bottom 3 State showing lowest Sex Ratio
+SELECT top 3 state, ROUND(AVG(sex_ratio),0) AS Avg_Sex_Ratio 
+FROM Indian_Census.dbo.Sheet2$
+GROUP BY state
+ORDER BY Avg_Sex_Ratio ASC;
+
+--Top and Bottom 3 States in Literacy State
+DROP TABLE if exists #TOP_STATES
+CREATE TABLE #TOP_STATES
+( state nvarchar (255),
+  TOP_STATES float
+)
+INSERT INTO #TOP_STATES
+SELECT state, ROUND(AVG(literacy),0) AS Avg_Literacy_Ratio 
+FROM Indian_Census.dbo.Sheet2$
+GROUP BY state
+ORDER BY Avg_Literacy_Ratio DESC;
+
+SELECT TOP 3 *
+FROM #TOP_STATES
+ORDER BY #TOP_STATES.TOP_STATES DESC;
+
+DROP TABLE if exists #BOTTOM_STATES
+CREATE TABLE #BOTTOM_STATES
+( state nvarchar (255),
+  BOTTOM_STATES float
+)
+INSERT INTO #BOTTOM_STATES
+SELECT state, ROUND(AVG(literacy),0) AS Avg_Literacy_Ratio 
+FROM Indian_Census.dbo.Sheet2$
+GROUP BY state
+ORDER BY Avg_Literacy_Ratio DESC;
+
+SELECT TOP 3 *
+FROM #BOTTOM_STATES
+ORDER BY #BOTTOM_STATES.BOTTOM_STATES ASC;
+
+--States that starts with the letter "A"
+SELECT DISTINCT(state) 
+FROM Indian_Census.dbo.Sheet2$
+WHERE LOWER (state) LIKE 'a%';
+
+--States that starts with the letter "A" and ends with "M"
+SELECT DISTINCT(state) 
+FROM Indian_Census.dbo.Sheet2$
+WHERE LOWER (state) LIKE 'a%' AND LOWER (state) LIKE '%m';
+
+--Joining Tables:
+SELECT d.State, SUM(d.Males) AS Total_Males, SUM(d.Females) AS Total_Females FROM
+(SELECT c.District, c.State, ROUND( c.Population / (c.Sex_Ratio +1),0) AS Males, ROUND((c.Population *c.Sex_Ratio)/ (c.Sex_Ratio +1),0)AS Females
+FROM
+(SELECT a.District, a.State, a.Sex_Ratio/1000 AS Sex_Ratio, b.Population 
+FROM Indian_Census.dbo.Sheet2$ a
+INNER JOIN Indian_Census.dbo.sheet$ b
+ON a.District = b.District) c) d
+GROUP BY d.State
+
+--Total Males and Females
+--Female/Males = Sex_Ratio
+--Female + Males = Population
+--Female = (Population - Males)
+--(Population - Males) = (Sex_Ratio)* Males
+--Population = Males (Sex_Ratio +1)
+--Males = Population / (Sex_Ratio +1)
+--Female = Population - Population/ (Sex_Ratio +1)
+
+
+--- Literacy Rate
+SELECT d.State, SUM(d.Total_Literate_People) AS Literate_People, SUM(d.Total_Illiterate_People) AS Illiterate_People FROM
+(SELECT c.District, c.State, ROUND((c.Literacy_Ratio *c.Population),0) AS Total_Literate_People, ROUND(((1-c.Literacy_Ratio)*c.Population),0) AS Total_Illiterate_People
+FROM
+(SELECT a.District, a.State, a.Literacy/100 AS Literacy_Ratio, b.Population 
+FROM Indian_Census.dbo.Sheet2$ a
+INNER JOIN Indian_Census.dbo.sheet$ b
+ON a.District = b.District) c) d
+GROUP BY d.State
+
+--Population - Previous Census
+select (g.total_area/g.previous_census_population)  as previous_census_population_vs_area, (g.total_area/g.current_census_population) as 
+current_census_population_vs_area from
+(select q.*,r.total_area from (
+
+select '1' as keyy,n.* from
+(select sum(m.previous_census_population) previous_census_population,sum(m.current_census_population) current_census_population from(
+select e.state,sum(e.previous_census_population) previous_census_population,sum(e.current_census_population) current_census_population from
+(select d.district,d.state,round(d.population/(1+d.growth),0) previous_census_population,d.population current_census_population from
+(select a.district,a.state,a.growth growth,b.population from Indian_Census.dbo.Sheet2$ a INNER JOIN Indian_Census.dbo.sheet$ b on a.district=b.district) d) e
+group by e.state)m) n) q inner join (
+
+select '1' as keyy,z.* from (
+select sum(area_km2) total_area from Indian_Census.dbo.sheet$)z)r on q.keyy=r.keyy)g
+
+
+
+--output top 3 districts from each state with highest literacy rate
+
+SELECT a.* FROM
+(SELECT District, State, Literacy, Rank() over(partition by State Order by Literacy DESC) Rank FROM
+Indian_Census.dbo.Sheet2$) a
+
+WHERE a.Rank in (1,2,3) ORDER BY State
